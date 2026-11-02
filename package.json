@@ -12,7 +12,7 @@
     "dist": "npm run build && electron-builder --mac"
   },
   "build": {
-    "appId": "dev.stosio.socialhub",
+    "appId": "com.maciekstosio.socialhub",
     "files": [
       "dist/**/*",
       "package.json"
