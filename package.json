@@ -1,0 +1,39 @@
+{
+  "name": "social-hub",
+  "productName": "Social Hub",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Social messaging without the feeds",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.renderer.json && cp src/renderer/*.html src/renderer/*.css dist/renderer/",
+    "start": "npm run build && env -u ELECTRON_RUN_AS_NODE electron .",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
+    "dist": "npm run build && electron-builder --mac"
+  },
+  "build": {
+    "appId": "dev.stosio.socialhub",
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "afterPack": "./scripts/after-pack.js",
+    "mac": {
+      "category": "public.app-category.social-networking",
+      "extendInfo": {
+        "NSCameraUsageDescription": "Used for video calls in Messenger and Instagram.",
+        "NSMicrophoneUsageDescription": "Used for voice and video calls in Messenger and Instagram."
+      }
+    },
+    "directories": {
+      "output": "release"
+    }
+  },
+  "devDependencies": {
+    "@electron/fuses": "^2.1.3",
+    "@types/node": "^26.6.6",
+    "electron": "^45.2.1",
+    "electron-builder": "^26.18.0",
+    "typescript": "^7.0.2"
+  }
+}

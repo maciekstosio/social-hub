@@ -1,0 +1,8 @@
+node_modules/
+dist/
+release/
+.DS_Store
+*.log
+.env*
+# Personal app data lives in ~/Library/Application Support/Social Hub, never in the repo
+config.json
