@@ -4,6 +4,7 @@ import path from 'node:path';
 import { blockedLogPath, configPath, loadConfig, type PlatformId } from './config';
 import { guardPlatformView, openLockedViewer } from './guard';
 import { createPlatforms, type Platform } from './platforms';
+import { restartToUpdate, startUpdates, updateReady } from './updater';
 
 const SIDEBAR_WIDTH = 76;
 const ALLOWED_PERMISSIONS = new Set(['media', 'fullscreen', 'clipboard-sanitized-write', 'speaker-selection']);
@@ -70,6 +71,10 @@ function createWindow() {
         partition: platform.partition,
         sandbox: true,
         contextIsolation: true,
+        // Views stay loaded while hidden. With throttling on, Chromium treats them as
+        // background tabs and caps in-flight image/fetch loads, so a few long-polling
+        // requests starve everything else for a minute or more.
+        backgroundThrottling: false,
         preload: platform.id === 'x' ? path.join(__dirname, '../preload/x-filter.js') : undefined,
       },
     });
@@ -89,6 +94,9 @@ function createWindow() {
   void win.loadFile(path.join(__dirname, '../renderer/sidebar.html'));
   win.on('closed', () => {
     mainWindow = null;
+    // WebContentsViews outlive their window; without this, every reopen from the
+    // Dock leaves the previous set of pages running hidden in the background.
+    for (const view of views.values()) view.webContents.close();
     views.clear();
   });
 }
@@ -122,6 +130,7 @@ function buildMenu() {
 ipcMain.handle('hub:platforms', () => ({
   platforms: platforms.map(({ id, label }) => ({ id, label })),
   active,
+  updateReady: updateReady(),
 }));
 ipcMain.on('hub:select', (_e, id: PlatformId) => select(id));
 ipcMain.on('hub:open-config', () => void shell.openPath(configPath()));
@@ -130,6 +139,7 @@ ipcMain.on('hub:open-log', () => {
   void shell.openPath(blockedLogPath());
 });
 ipcMain.on('hub:relaunch', () => {
+  if (updateReady()) return restartToUpdate();
   app.relaunch();
   app.exit(0);
 });
@@ -151,6 +161,7 @@ if (!app.requestSingleInstanceLock()) {
   void app.whenReady().then(() => {
     buildMenu();
     createWindow();
+    startUpdates(() => mainWindow?.webContents.send('hub:update-ready'));
     app.on('activate', () => {
       if (!mainWindow) createWindow();
     });

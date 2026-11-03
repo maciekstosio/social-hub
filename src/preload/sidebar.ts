@@ -7,4 +7,5 @@ contextBridge.exposeInMainWorld('hub', {
   openLog: () => ipcRenderer.send('hub:open-log'),
   relaunch: () => ipcRenderer.send('hub:relaunch'),
   onActive: (cb: (id: string) => void) => ipcRenderer.on('hub:active', (_e, id: string) => cb(id)),
+  onUpdateReady: (cb: () => void) => ipcRenderer.on('hub:update-ready', () => cb()),
 });

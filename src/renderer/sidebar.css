@@ -84,3 +84,8 @@ button:active {
   background: #000;
   border: 1px solid #333;
 }
+
+#tools button.update {
+  background: #2f7d4f;
+  color: #fff;
+}
