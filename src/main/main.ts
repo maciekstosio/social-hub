@@ -134,7 +134,11 @@ ipcMain.on('hub:relaunch', () => {
   app.exit(0);
 });
 ipcMain.on('x-filter:config', (event) => {
-  event.returnValue = { friends: config.x.friends };
+  event.returnValue = { friends: config.x.friends, home: platforms.find((p) => p.id === 'x')?.home };
+});
+ipcMain.on('x-filter:self', (event, handle: unknown) => {
+  if (typeof handle !== 'string' || event.sender !== views.get('x')?.webContents) return;
+  platforms.find((p) => p.id === 'x')?.setSelf?.(handle);
 });
 
 if (!app.requestSingleInstanceLock()) {
