@@ -80,12 +80,23 @@ function instagram(config: HubConfig): Platform {
     label: 'Instagram',
     partition: 'persist:instagram',
     home: 'https://www.instagram.com/direct/inbox/',
-    // Left rail: keep only Notifications. Anchored on the Search link (/explore/),
-    // since Notifications always follows it and labels follow the account language.
+    // Left rail: keep only Notifications, pinned top-left as a bare icon. Anchored on
+    // the Search link (/explore/), since Notifications always follows it and labels
+    // follow the account language. The rail panel is hidden with `visibility` (not
+    // `display`) so the Notifications item can opt back in, and since hidden elements
+    // take no hover, the rail never expands; the item itself is clipped to its icon.
     css: `
-      div:has(> div > div > div > span > div > a[href="/explore/"]) > :not(:has(a[href="/explore/"])),
-      div:has(> div > span > div > a[href="/explore/"]) > :not(:has(a[href="/explore/"]) + *) {
-        display: none !important;
+      div:has(> div > div > div > div > span > div > a[href="/explore/"]) {
+        visibility: hidden !important;
+        width: 72px !important;
+      }
+      div:has(> span > div > a[href="/explore/"]) + div {
+        visibility: visible !important;
+        position: fixed !important;
+        top: 24px !important;
+        left: 12px !important;
+        width: 48px !important;
+        overflow: hidden !important;
       }
     `,
     itemKey,
