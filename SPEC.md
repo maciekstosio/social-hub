@@ -48,11 +48,47 @@ Goal: log out of Instagram / Facebook / X everywhere else and use only this.
 - Blocked: `/`, `/watch`, `/marketplace`, `/groups`, `/events`, `/reel/*` (outside viewer), profiles, everything else
 
 ### X — home: `https://x.com/i/lists/<LIST_ID>`
-- `/i/lists/<LIST_ID>`
-- `/messages/*` and/or XChat route (verify current URL)
-- `/<handle>/status/<id>` only when `<handle>` is in the friends set
-- Login / 2FA / `/settings/*`
-- Blocked: `/home`, `/explore`, `/search`, `/i/trends`, notifications, other profiles, everything else
+- `/i/lists/<LIST_ID>` plus its editor: `/info`, `/members`, `/members/suggested` (only the configured list)
+- `/messages/*`, `/i/chat/*`
+- `/notifications/*`, `/compose/*`
+- Own profile (handle auto-detected from X's nav) and its tabs: posts, `/with_replies`, `/media`, `/likes`, `/highlights`, `/articles`
+- `/<handle>/status/<id>` inline when `<handle>` is in the friends set or is you; anyone else's → locked viewer
+- Login / 2FA / `/account/*` / `/settings/*` / `/logout`
+- Blocked: `/home`, `/explore`, `/search`, `/i/trends`, `/i/grok`, other profiles, own followers/following, other lists, everything else
+
+## What's visible (agreed UI)
+
+Decisions made while using the app; keep these when sites change their DOM.
+
+**Instagram**
+- DM inbox and threads, calls, login/2FA, account settings.
+- Left rail hidden; only the **Notifications** heart stays, pinned top-left as a bare icon.
+  The rail must not expand on hover.
+
+**Facebook**
+- Messages, calls, login/2FA, settings/privacy.
+- Top bar: only **notifications** and the **profile menu**; logo/home, search and the nav tabs are hidden.
+
+**X**
+- Left nav: only **Home**, **Notifications**, the **compose** button and the **avatar**.
+  The X logo and every other nav item (Explore, Grok, Chat, Lists, Bookmarks, Communities,
+  Premium, Profile link, More) are hidden.
+- **Home** returns to the friends list (the app's X home), never X's `/home` feed.
+- **Avatar** opens your own profile instead of the account menu (so "Log out" is gone from there;
+  `/logout` is still allowed).
+- Right sidebar column (trends, who to follow) hidden; floating **Grok** and **Chat** buttons hidden.
+- The list feed shows everything from the list. The friends-only author filter runs only when
+  `x.friends` in `config.json` is non-empty; your own handle never switches it on. When on, it hides
+  non-friend posts, "Who to follow" cells and the thread leftovers ("Show more replies") under hidden posts.
+- List editing works for the configured list: details, members, add/remove via the buttons;
+  opening a member's profile stays blocked.
+- DMs are reachable via their URL but have no nav icon.
+
+**Opening links from outside** (e.g. recommendations from work)
+- Sidebar link button, **⌘L** (View → Open Link from Clipboard), or dropping a link on the sidebar.
+- The link goes through the same allowlist: allowed pages open in their platform's view, shared
+  posts/reels/stories in the locked viewer, non-social links in the system browser.
+  Anything blocked (profiles, feeds, Threads) stays blocked: a dialog says so and it's logged.
 
 ## Mechanics
 

@@ -1,9 +1,10 @@
-import { app, BrowserWindow, ipcMain, Menu, session, shell, WebContentsView } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, session, shell, WebContentsView } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
-import { blockedLogPath, configPath, loadConfig, type PlatformId } from './config';
+import { blockedLogPath, configPath, loadConfig, logBlocked, type PlatformId } from './config';
 import { guardPlatformView, openLockedViewer } from './guard';
-import { createPlatforms, type Platform } from './platforms';
+import { createPlatforms, routeLink, type Platform } from './platforms';
+import { restartToUpdate, startUpdates, updateReady } from './updater';
 
 const SIDEBAR_WIDTH = 76;
 const ALLOWED_PERMISSIONS = new Set(['media', 'fullscreen', 'clipboard-sanitized-write', 'speaker-selection']);
@@ -33,16 +34,46 @@ function layout() {
   }
 }
 
-function select(id: PlatformId) {
+function select(id: PlatformId, url?: string) {
   const platform = platforms.find((p) => p.id === id);
   const view = views.get(id);
   if (!platform || !view) return;
   // Clicking the active icon again goes back to the platform home.
-  if (id === active) void view.webContents.loadURL(platform.home);
+  if (url) void view.webContents.loadURL(url);
+  else if (id === active) void view.webContents.loadURL(platform.home);
   active = id;
   for (const [vid, v] of views) v.setVisible(vid === id);
   view.webContents.focus();
   mainWindow?.webContents.send('hub:active', id);
+}
+
+/** Opens a link from outside the hub (clipboard, drag & drop) through the allowlist. */
+async function openLink(source: string | Promise<string>) {
+  const text = await source;
+  const win = mainWindow;
+  if (!win) return;
+  const route = routeLink(platforms, text);
+  switch (route.kind) {
+    case 'allow':
+      return select(route.platform.id, route.url);
+    case 'viewer':
+      return openLockedViewer(win, route.platform, route.url);
+    case 'external':
+      return void shell.openExternal(route.url);
+    case 'none':
+      return void dialog.showMessageBox(win, {
+        type: 'info',
+        message: 'No link to open',
+        detail: 'Copy a link first, then use Open Link (⌘L).',
+      });
+    case 'block':
+      logBlocked(route.platform?.id ?? 'link', 'pasted', route.url);
+      return void dialog.showMessageBox(win, {
+        type: 'warning',
+        message: `${route.platform?.label ?? 'This page'} isn't allowed in Social Hub`,
+        detail: `${route.url}\n\nOnly messages, shared posts/reels/stories and your X list open here.`,
+      });
+  }
 }
 
 function createWindow() {
@@ -70,6 +101,10 @@ function createWindow() {
         partition: platform.partition,
         sandbox: true,
         contextIsolation: true,
+        // Views stay loaded while hidden. With throttling on, Chromium treats them as
+        // background tabs and caps in-flight image/fetch loads, so a few long-polling
+        // requests starve everything else for a minute or more.
+        backgroundThrottling: false,
         preload: platform.id === 'x' ? path.join(__dirname, '../preload/x-filter.js') : undefined,
       },
     });
@@ -89,6 +124,9 @@ function createWindow() {
   void win.loadFile(path.join(__dirname, '../renderer/sidebar.html'));
   win.on('closed', () => {
     mainWindow = null;
+    // WebContentsViews outlive their window; without this, every reopen from the
+    // Dock leaves the previous set of pages running hidden in the background.
+    for (const view of views.values()) view.webContents.close();
     views.clear();
   });
 }
@@ -108,6 +146,8 @@ function buildMenu() {
             click: () => select(p.id),
           })),
           { type: 'separator' },
+          { label: 'Open Link from Clipboard', accelerator: 'CmdOrCtrl+L', click: () => void openLink(clipboard.readText()) },
+          { type: 'separator' },
           { label: 'Reload', accelerator: 'CmdOrCtrl+R', click: () => activeContents()?.reload() },
           { label: 'Developer Tools', accelerator: 'Alt+CmdOrCtrl+I', click: () => activeContents()?.toggleDevTools() },
           { type: 'separator' },
@@ -122,19 +162,26 @@ function buildMenu() {
 ipcMain.handle('hub:platforms', () => ({
   platforms: platforms.map(({ id, label }) => ({ id, label })),
   active,
+  updateReady: updateReady(),
 }));
 ipcMain.on('hub:select', (_e, id: PlatformId) => select(id));
+ipcMain.on('hub:open-link', (_e, text: unknown) => void openLink(typeof text === 'string' ? text : clipboard.readText()));
 ipcMain.on('hub:open-config', () => void shell.openPath(configPath()));
 ipcMain.on('hub:open-log', () => {
   fs.appendFileSync(blockedLogPath(), '');
   void shell.openPath(blockedLogPath());
 });
 ipcMain.on('hub:relaunch', () => {
+  if (updateReady()) return restartToUpdate();
   app.relaunch();
   app.exit(0);
 });
 ipcMain.on('x-filter:config', (event) => {
-  event.returnValue = { friends: config.x.friends };
+  event.returnValue = { friends: config.x.friends, home: platforms.find((p) => p.id === 'x')?.home };
+});
+ipcMain.on('x-filter:self', (event, handle: unknown) => {
+  if (typeof handle !== 'string' || event.sender !== views.get('x')?.webContents) return;
+  platforms.find((p) => p.id === 'x')?.setSelf?.(handle);
 });
 
 if (!app.requestSingleInstanceLock()) {
@@ -145,8 +192,11 @@ if (!app.requestSingleInstanceLock()) {
     mainWindow?.focus();
   });
   void app.whenReady().then(() => {
+    // Packaged builds get the icon from the bundle; dev runs use the stock Electron one.
+    if (!app.isPackaged) app.dock?.setIcon(path.join(__dirname, '../../build/icon.png'));
     buildMenu();
     createWindow();
+    startUpdates(() => mainWindow?.webContents.send('hub:update-ready'));
     app.on('activate', () => {
       if (!mainWindow) createWindow();
     });

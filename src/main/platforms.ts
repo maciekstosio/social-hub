@@ -18,6 +18,8 @@ export interface Platform {
   classify(url: string): Verdict;
   /** Stable identity of a shared item, used to keep the viewer locked to it. */
   itemKey(url: string): string | null;
+  /** Tells the platform which account is signed in (X: handle, so its profile is allowed). */
+  setSelf?(handle: string): void;
 }
 
 /** Hosts that belong to social platforms; they never leave the hub. */
@@ -174,8 +176,12 @@ function x(config: HubConfig): Platform {
   const friends = new Set(config.x.friends.map((h) => h.replace(/^@/, '').toLowerCase()));
   const listId = config.x.listId.trim();
   const host = /^(www\.)?(x|twitter)\.com$/;
-  const allowPath = /^\/(messages|i\/chat|i\/flow|i\/jf|login|logout|account|settings)(\/|$)/;
+  const allowPath = /^\/(messages|i\/chat|i\/flow|i\/jf|login|logout|account|settings|notifications|compose)(\/|$)/;
   const statusPath = /^\/(\w{1,15})\/status\/(\d+)/;
+  // Own profile tabs only; followers/following lists would lead to strangers.
+  const profilePath = /^\/(\w{1,15})(\/(with_replies|media|likes|highlights|articles))?\/?$/;
+  /** Signed-in handle, reported by the X preload once the nav renders. */
+  let self: string | null = null;
 
   return {
     id: 'x',
@@ -187,17 +193,26 @@ function x(config: HubConfig): Platform {
       const m = u && host.test(u.hostname) ? u.pathname.match(statusPath) : null;
       return m ? `x:${m[2]}` : null;
     },
+    setSelf(handle) {
+      self = /^\w{1,15}$/.test(handle) ? handle.toLowerCase() : null;
+    },
     classify(url) {
       const u = parse(url);
       if (!u) return { kind: 'block' };
       if (extra.some((r) => r.test(url))) return { kind: 'allow' };
       if (!host.test(u.hostname)) return fallback(u);
       if (allowPath.test(u.pathname)) return { kind: 'allow' };
-      if (listId && new RegExp(`^/i/lists/${listId}/?$`).test(u.pathname)) return { kind: 'allow' };
+      // The list itself plus its editor: details, members and the "add members" search.
+      if (listId && new RegExp(`^/i/lists/${listId}(/(info|members|members/suggested))?/?$`).test(u.pathname)) {
+        return { kind: 'allow' };
+      }
+      const profile = u.pathname.match(profilePath);
+      if (profile && self && profile[1].toLowerCase() === self) return { kind: 'allow' };
       const status = u.pathname.match(statusPath);
       if (status) {
-        // Friends' posts open inline; anyone else's only in the locked viewer.
-        return friends.has(status[1].toLowerCase()) ? { kind: 'allow' } : { kind: 'viewer', url: u.href };
+        // Friends' and own posts open inline; anyone else's only in the locked viewer.
+        const author = status[1].toLowerCase();
+        return friends.has(author) || author === self ? { kind: 'allow' } : { kind: 'viewer', url: u.href };
       }
       return { kind: 'block' };
     },
@@ -206,4 +221,50 @@ function x(config: HubConfig): Platform {
 
 export function createPlatforms(config: HubConfig): Platform[] {
   return [instagram(config), facebook(config), x(config)];
+}
+
+/** Where a link pasted into the hub should go. */
+export type LinkRoute =
+  | { kind: 'none' }
+  | { kind: 'external'; url: string }
+  | { kind: 'block'; platform: Platform | null; url: string }
+  | { kind: 'allow' | 'viewer'; platform: Platform; url: string };
+
+/** First http(s) URL in pasted text; a bare "x.com/…" also counts. */
+export function extractUrl(text: string): string | null {
+  const found = text.match(/https?:\/\/[^\s<>"']+/i)?.[0] ?? text.trim().match(/^[\w-]+(\.[\w-]+)+(\/\S*)?$/)?.[0];
+  if (!found) return null;
+  const u = parse(/^https?:/i.test(found) ? found : `https://${found}`);
+  return u ? u.href : null;
+}
+
+/**
+ * Routes a link from outside (e.g. a colleague's recommendation) through the same
+ * allowlist as in-app navigation: allowed pages open in their platform's view,
+ * shared items in the locked viewer, non-social links in the system browser.
+ */
+export function routeLink(platforms: Platform[], text: string): LinkRoute {
+  const extracted = extractUrl(text);
+  if (!extracted) return { kind: 'none' };
+  const url = unwrapLinkShim(extracted);
+  let blockedBy: Platform | null = null;
+  for (const platform of platforms) {
+    const verdict = platform.classify(url);
+    if (verdict.kind === 'allow') return { kind: 'allow', platform, url };
+    if (verdict.kind === 'viewer') return { kind: 'viewer', platform, url: verdict.url };
+    if (!blockedBy && ownsHost(platform, url)) blockedBy = platform;
+  }
+  // Calls and anything else a platform rejects stay blocked, as do other social sites (Threads).
+  if (blockedBy || SOCIAL_HOST.test(parse(url)?.hostname ?? '')) return { kind: 'block', platform: blockedBy, url };
+  return { kind: 'external', url };
+}
+
+const PLATFORM_HOST: Record<PlatformId, RegExp> = {
+  instagram: /(^|\.)instagram\.com$/,
+  facebook: /(^|\.)(facebook\.com|fb\.com|fb\.watch|messenger\.com)$/,
+  x: /(^|\.)(x\.com|twitter\.com)$/,
+};
+
+function ownsHost(platform: Platform, url: string): boolean {
+  return PLATFORM_HOST[platform.id].test(parse(url)?.hostname ?? '');
 }

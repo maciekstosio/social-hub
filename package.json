@@ -9,21 +9,47 @@
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.renderer.json && cp src/renderer/*.html src/renderer/*.css dist/renderer/",
     "start": "npm run build && env -u ELECTRON_RUN_AS_NODE electron .",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
-    "dist": "npm run build && electron-builder --mac"
+    "dist": "npm run build && electron-builder --mac --publish never",
+    "test": "npm run build && node --test \"test/*.test.mjs\""
   },
   "build": {
     "appId": "com.maciekstosio.socialhub",
+    "productName": "Social Hub",
+    "artifactName": "Social-Hub-${version}-${arch}.${ext}",
     "files": [
       "dist/**/*",
+      "!dist/**/*.map",
       "package.json"
     ],
     "afterPack": "./scripts/after-pack.js",
     "mac": {
       "category": "public.app-category.social-networking",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
       "extendInfo": {
         "NSCameraUsageDescription": "Used for video calls in Messenger and Instagram.",
         "NSMicrophoneUsageDescription": "Used for voice and video calls in Messenger and Instagram."
       }
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "maciekstosio",
+      "repo": "social-hub"
     },
     "directories": {
       "output": "release"
@@ -35,5 +61,12 @@
     "electron": "^45.2.1",
     "electron-builder": "^26.18.0",
     "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/maciekstosio/social-hub.git"
   }
 }
