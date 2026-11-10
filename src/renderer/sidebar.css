@@ -89,3 +89,8 @@ button:active {
   background: #2f7d4f;
   color: #fff;
 }
+
+#tools button svg {
+  display: block;
+  margin: auto;
+}

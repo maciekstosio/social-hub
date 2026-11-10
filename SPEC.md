@@ -84,6 +84,12 @@ Decisions made while using the app; keep these when sites change their DOM.
   opening a member's profile stays blocked.
 - DMs are reachable via their URL but have no nav icon.
 
+**Opening links from outside** (e.g. recommendations from work)
+- Sidebar link button, **⌘L** (View → Open Link from Clipboard), or dropping a link on the sidebar.
+- The link goes through the same allowlist: allowed pages open in their platform's view, shared
+  posts/reels/stories in the locked viewer, non-social links in the system browser.
+  Anything blocked (profiles, feeds, Threads) stays blocked: a dialog says so and it's logged.
+
 ## Mechanics
 
 - **Navigation guard** (main process, per WebContents):

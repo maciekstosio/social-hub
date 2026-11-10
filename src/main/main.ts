@@ -1,9 +1,9 @@
-import { app, BrowserWindow, ipcMain, Menu, session, shell, WebContentsView } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, session, shell, WebContentsView } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
-import { blockedLogPath, configPath, loadConfig, type PlatformId } from './config';
+import { blockedLogPath, configPath, loadConfig, logBlocked, type PlatformId } from './config';
 import { guardPlatformView, openLockedViewer } from './guard';
-import { createPlatforms, type Platform } from './platforms';
+import { createPlatforms, routeLink, type Platform } from './platforms';
 import { restartToUpdate, startUpdates, updateReady } from './updater';
 
 const SIDEBAR_WIDTH = 76;
@@ -34,16 +34,46 @@ function layout() {
   }
 }
 
-function select(id: PlatformId) {
+function select(id: PlatformId, url?: string) {
   const platform = platforms.find((p) => p.id === id);
   const view = views.get(id);
   if (!platform || !view) return;
   // Clicking the active icon again goes back to the platform home.
-  if (id === active) void view.webContents.loadURL(platform.home);
+  if (url) void view.webContents.loadURL(url);
+  else if (id === active) void view.webContents.loadURL(platform.home);
   active = id;
   for (const [vid, v] of views) v.setVisible(vid === id);
   view.webContents.focus();
   mainWindow?.webContents.send('hub:active', id);
+}
+
+/** Opens a link from outside the hub (clipboard, drag & drop) through the allowlist. */
+async function openLink(source: string | Promise<string>) {
+  const text = await source;
+  const win = mainWindow;
+  if (!win) return;
+  const route = routeLink(platforms, text);
+  switch (route.kind) {
+    case 'allow':
+      return select(route.platform.id, route.url);
+    case 'viewer':
+      return openLockedViewer(win, route.platform, route.url);
+    case 'external':
+      return void shell.openExternal(route.url);
+    case 'none':
+      return void dialog.showMessageBox(win, {
+        type: 'info',
+        message: 'No link to open',
+        detail: 'Copy a link first, then use Open Link (⌘L).',
+      });
+    case 'block':
+      logBlocked(route.platform?.id ?? 'link', 'pasted', route.url);
+      return void dialog.showMessageBox(win, {
+        type: 'warning',
+        message: `${route.platform?.label ?? 'This page'} isn't allowed in Social Hub`,
+        detail: `${route.url}\n\nOnly messages, shared posts/reels/stories and your X list open here.`,
+      });
+  }
 }
 
 function createWindow() {
@@ -116,6 +146,8 @@ function buildMenu() {
             click: () => select(p.id),
           })),
           { type: 'separator' },
+          { label: 'Open Link from Clipboard', accelerator: 'CmdOrCtrl+L', click: () => void openLink(clipboard.readText()) },
+          { type: 'separator' },
           { label: 'Reload', accelerator: 'CmdOrCtrl+R', click: () => activeContents()?.reload() },
           { label: 'Developer Tools', accelerator: 'Alt+CmdOrCtrl+I', click: () => activeContents()?.toggleDevTools() },
           { type: 'separator' },
@@ -133,6 +165,7 @@ ipcMain.handle('hub:platforms', () => ({
   updateReady: updateReady(),
 }));
 ipcMain.on('hub:select', (_e, id: PlatformId) => select(id));
+ipcMain.on('hub:open-link', (_e, text: unknown) => void openLink(typeof text === 'string' ? text : clipboard.readText()));
 ipcMain.on('hub:open-config', () => void shell.openPath(configPath()));
 ipcMain.on('hub:open-log', () => {
   fs.appendFileSync(blockedLogPath(), '');
@@ -159,6 +192,8 @@ if (!app.requestSingleInstanceLock()) {
     mainWindow?.focus();
   });
   void app.whenReady().then(() => {
+    // Packaged builds get the icon from the bundle; dev runs use the stock Electron one.
+    if (!app.isPackaged) app.dock?.setIcon(path.join(__dirname, '../../build/icon.png'));
     buildMenu();
     createWindow();
     startUpdates(() => mainWindow?.webContents.send('hub:update-ready'));

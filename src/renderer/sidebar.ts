@@ -1,6 +1,7 @@
 interface HubBridge {
   platforms(): Promise<{ platforms: { id: string; label: string }[]; active: string; updateReady: boolean }>;
   select(id: string): void;
+  openLink(text?: string): void;
   openConfig(): void;
   openLog(): void;
   relaunch(): void;
@@ -40,6 +41,14 @@ void bridge.platforms().then(({ platforms, active, updateReady }) => {
 
 bridge.onActive(markActive);
 bridge.onUpdateReady(markUpdateReady);
+document.getElementById('open-link')!.addEventListener('click', () => bridge.openLink());
+// Links dropped onto the sidebar (e.g. dragged from Slack or a browser) open the same way.
+document.addEventListener('dragover', (event) => event.preventDefault());
+document.addEventListener('drop', (event) => {
+  event.preventDefault();
+  const text = event.dataTransfer?.getData('text/uri-list') || event.dataTransfer?.getData('text/plain');
+  if (text) bridge.openLink(text);
+});
 document.getElementById('open-config')!.addEventListener('click', () => bridge.openConfig());
 document.getElementById('open-log')!.addEventListener('click', () => bridge.openLog());
 document.getElementById('relaunch')!.addEventListener('click', () => bridge.relaunch());

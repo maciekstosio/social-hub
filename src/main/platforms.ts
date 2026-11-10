@@ -222,3 +222,49 @@ function x(config: HubConfig): Platform {
 export function createPlatforms(config: HubConfig): Platform[] {
   return [instagram(config), facebook(config), x(config)];
 }
+
+/** Where a link pasted into the hub should go. */
+export type LinkRoute =
+  | { kind: 'none' }
+  | { kind: 'external'; url: string }
+  | { kind: 'block'; platform: Platform | null; url: string }
+  | { kind: 'allow' | 'viewer'; platform: Platform; url: string };
+
+/** First http(s) URL in pasted text; a bare "x.com/…" also counts. */
+export function extractUrl(text: string): string | null {
+  const found = text.match(/https?:\/\/[^\s<>"']+/i)?.[0] ?? text.trim().match(/^[\w-]+(\.[\w-]+)+(\/\S*)?$/)?.[0];
+  if (!found) return null;
+  const u = parse(/^https?:/i.test(found) ? found : `https://${found}`);
+  return u ? u.href : null;
+}
+
+/**
+ * Routes a link from outside (e.g. a colleague's recommendation) through the same
+ * allowlist as in-app navigation: allowed pages open in their platform's view,
+ * shared items in the locked viewer, non-social links in the system browser.
+ */
+export function routeLink(platforms: Platform[], text: string): LinkRoute {
+  const extracted = extractUrl(text);
+  if (!extracted) return { kind: 'none' };
+  const url = unwrapLinkShim(extracted);
+  let blockedBy: Platform | null = null;
+  for (const platform of platforms) {
+    const verdict = platform.classify(url);
+    if (verdict.kind === 'allow') return { kind: 'allow', platform, url };
+    if (verdict.kind === 'viewer') return { kind: 'viewer', platform, url: verdict.url };
+    if (!blockedBy && ownsHost(platform, url)) blockedBy = platform;
+  }
+  // Calls and anything else a platform rejects stay blocked, as do other social sites (Threads).
+  if (blockedBy || SOCIAL_HOST.test(parse(url)?.hostname ?? '')) return { kind: 'block', platform: blockedBy, url };
+  return { kind: 'external', url };
+}
+
+const PLATFORM_HOST: Record<PlatformId, RegExp> = {
+  instagram: /(^|\.)instagram\.com$/,
+  facebook: /(^|\.)(facebook\.com|fb\.com|fb\.watch|messenger\.com)$/,
+  x: /(^|\.)(x\.com|twitter\.com)$/,
+};
+
+function ownsHost(platform: Platform, url: string): boolean {
+  return PLATFORM_HOST[platform.id].test(parse(url)?.hostname ?? '');
+}

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import platformsModule from '../dist/main/platforms.js';
 
-const { createPlatforms, unwrapLinkShim } = platformsModule;
+const { createPlatforms, unwrapLinkShim, extractUrl, routeLink } = platformsModule;
 const config = {
   x: { listId: '123', friends: ['@Alice'] },
   instagram: { viewerUseEmbed: false },
@@ -12,6 +12,11 @@ const config = {
 };
 const [ig, fb, x] = createPlatforms(config);
 const kind = (platform, url) => platform.classify(url).kind;
+const platforms = [ig, fb, x];
+const route = (text) => {
+  const r = routeLink(platforms, text);
+  return { kind: r.kind, platform: r.platform?.id ?? null, url: r.url };
+};
 
 test('Instagram: inbox and login only, shared items in the viewer', () => {
   assert.equal(kind(ig, 'https://www.instagram.com/direct/t/1234/'), 'allow');
@@ -82,4 +87,24 @@ test('X: notifications, compose and own profile', () => {
 test('Meta link shims are unwrapped', () => {
   assert.equal(unwrapLinkShim('https://l.instagram.com/?u=https%3A%2F%2Fexample.com%2Fa&e=x'), 'https://example.com/a');
   assert.equal(unwrapLinkShim('https://l.facebook.com/l.php?u=https%3A%2F%2Fexample.com%2Fb'), 'https://example.com/b');
+});
+
+test('Pasted links: the URL is found in surrounding text', () => {
+  assert.equal(extractUrl('check this out https://x.com/bob/status/42?s=20 so good'), 'https://x.com/bob/status/42?s=20');
+  assert.equal(extractUrl('  instagram.com/reel/ABC/  '), 'https://instagram.com/reel/ABC/');
+  assert.equal(extractUrl('no link here'), null);
+  assert.equal(extractUrl(''), null);
+});
+
+test('Pasted links go through the allowlist', () => {
+  assert.deepEqual(route('https://www.instagram.com/reel/ABC/?igsh=xyz'), { kind: 'viewer', platform: 'instagram', url: 'https://www.instagram.com/reel/ABC/' });
+  assert.deepEqual(route('https://x.com/bob/status/42'), { kind: 'viewer', platform: 'x', url: 'https://x.com/bob/status/42' });
+  assert.deepEqual(route('https://twitter.com/alice/status/42'), { kind: 'allow', platform: 'x', url: 'https://twitter.com/alice/status/42' });
+  assert.deepEqual(route('https://www.facebook.com/share/r/abc/'), { kind: 'viewer', platform: 'facebook', url: 'https://www.facebook.com/share/r/abc/' });
+  assert.deepEqual(route('https://l.instagram.com/?u=https%3A%2F%2Fexample.com%2Fa'), { kind: 'external', platform: null, url: 'https://example.com/a' });
+  assert.deepEqual(route('https://www.youtube.com/watch?v=1'), { kind: 'external', platform: null, url: 'https://www.youtube.com/watch?v=1' });
+  assert.deepEqual(route('https://www.instagram.com/someuser/'), { kind: 'block', platform: 'instagram', url: 'https://www.instagram.com/someuser/' });
+  assert.deepEqual(route('https://x.com/explore'), { kind: 'block', platform: 'x', url: 'https://x.com/explore' });
+  assert.deepEqual(route('https://www.threads.net/@bob'), { kind: 'block', platform: null, url: 'https://www.threads.net/@bob' });
+  assert.equal(route('hello').kind, 'none');
 });
