@@ -1,12 +1,10 @@
 interface HubBridge {
-  platforms(): Promise<{ platforms: { id: string; label: string }[]; active: string; updateReady: boolean }>;
+  platforms(): Promise<{ platforms: { id: string; label: string }[]; active: string }>;
   select(id: string): void;
   openLink(text?: string): void;
-  openConfig(): void;
-  openLog(): void;
-  relaunch(): void;
   onActive(cb: (id: string) => void): void;
-  onUpdateReady(cb: () => void): void;
+  setDockOpen(open: boolean): void;
+  onDockClose(cb: () => void): void;
 }
 
 const bridge = (window as unknown as { hub: HubBridge }).hub;
@@ -18,14 +16,7 @@ function markActive(id: string) {
   }
 }
 
-function markUpdateReady() {
-  const button = document.getElementById('relaunch')!;
-  button.classList.add('update');
-  button.title = 'Update downloaded: restart to install';
-}
-
-void bridge.platforms().then(({ platforms, active, updateReady }) => {
-  if (updateReady) markUpdateReady();
+void bridge.platforms().then(({ platforms, active }) => {
   const nav = document.getElementById('platforms')!;
   for (const platform of platforms) {
     const button = document.createElement('button');
@@ -40,15 +31,33 @@ void bridge.platforms().then(({ platforms, active, updateReady }) => {
 });
 
 bridge.onActive(markActive);
-bridge.onUpdateReady(markUpdateReady);
+// The dock view is a thin strip at the window edge until the pointer reaches it. Opening
+// widens the view first, then slides the bubbles in; closing (decided by main, which can
+// see the pointer over the platform page) slides them out, then shrinks the view.
+const SLIDE_MS = 240;
+let collapseTimer: ReturnType<typeof setTimeout> | undefined;
+
+function openDock() {
+  clearTimeout(collapseTimer);
+  collapseTimer = undefined;
+  if (document.body.classList.contains('open')) return;
+  bridge.setDockOpen(true);
+  requestAnimationFrame(() => document.body.classList.add('open'));
+}
+
+document.addEventListener('mousemove', openDock);
+document.addEventListener('dragenter', openDock);
+bridge.onDockClose(() => {
+  document.body.classList.remove('open');
+  clearTimeout(collapseTimer);
+  collapseTimer = setTimeout(() => bridge.setDockOpen(false), SLIDE_MS);
+});
+
 document.getElementById('open-link')!.addEventListener('click', () => bridge.openLink());
-// Links dropped onto the sidebar (e.g. dragged from Slack or a browser) open the same way.
+// Links dropped onto the dock (e.g. dragged from Slack or a browser) open the same way.
 document.addEventListener('dragover', (event) => event.preventDefault());
 document.addEventListener('drop', (event) => {
   event.preventDefault();
   const text = event.dataTransfer?.getData('text/uri-list') || event.dataTransfer?.getData('text/plain');
   if (text) bridge.openLink(text);
 });
-document.getElementById('open-config')!.addEventListener('click', () => bridge.openConfig());
-document.getElementById('open-log')!.addEventListener('click', () => bridge.openLog());
-document.getElementById('relaunch')!.addEventListener('click', () => bridge.relaunch());
