@@ -11,7 +11,7 @@ Goal: log out of Instagram / Facebook / X everywhere else and use only this.
 | 2 | PC-first. Wrap the official web apps. No Matrix / mautrix bridges (possible later for mobile). |
 | 3 | Navigation is URL-allowlisted. Anything else is blocked and redirected home. Must catch SPA (in-page) navigation, not only full loads. |
 | 4 | Shared posts/reels/stories open in a **locked single-item viewer**; prefer `/embed` pages, fall back to the exact URL. Any URL change → close viewer. **Back always returns to the chat.** |
-| 5 | Layout: left sidebar with platform icons; one WebView per platform. |
+| 5 | Layout: one WebView per platform filling the window; traffic lights sit in a dark pill, and the platform/tool buttons are floating bubbles that slide in when the pointer reaches the left edge. |
 | 6 | X: DMs + friends-only feed via a **private X List**, plus a local author-handle check that hides anything not from listed friends (ads, promoted, suggested). Model-based filter plugin deferred. |
 | 7 | Electron + TypeScript. One persistent session partition per platform. Cookie encryption enabled via Electron fuse (Keychain). |
 | 8 | No notifications in MVP. |
@@ -85,7 +85,7 @@ Decisions made while using the app; keep these when sites change their DOM.
 - DMs are reachable via their URL but have no nav icon.
 
 **Opening links from outside** (e.g. recommendations from work)
-- Sidebar link button, **⌘L** (View → Open Link from Clipboard), or dropping a link on the sidebar.
+- Dock link button, **⌘L** (View → Open Link from Clipboard), or dropping a link on the left window edge (the dock).
 - The link goes through the same allowlist: allowed pages open in their platform's view, shared
   posts/reels/stories in the locked viewer, non-social links in the system browser.
   Anything blocked (profiles, feeds, Threads) stays blocked: a dialog says so and it's logged.

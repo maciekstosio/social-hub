@@ -37,7 +37,7 @@ Repository secrets it needs (same as in `declutter`):
 
 ## Configure
 
-Click ⚙ in the sidebar to open `config.json`, then ↻ to restart and apply it.
+Use **Social Hub → Settings… (⌘,)** to open `config.json`, then **Social Hub → Restart (⇧⌘R)** to apply it.
 
 ```json
 {
