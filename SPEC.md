@@ -36,7 +36,7 @@ Goal: log out of Instagram / Facebook / X everywhere else and use only this.
 - `/direct/*`
 - `/accounts/*` (login, 2FA, settings)
 - `/challenge/*` (security checks)
-- Locked viewer only: `/p/<id>/`, `/reel/<id>/`, `/stories/<user>/<id>/` (+ `/embed`)
+- Locked viewer only: `/p/<id>/`, `/reel/<id>/`, `/stories/<user>/` and `/stories/<user>/<id>/` (+ `/embed`)
 - Blocked: `/`, `/explore/*`, `/reels/*`, profiles, everything else
 
 ### Facebook — home: `https://www.facebook.com/messages/`
@@ -64,6 +64,9 @@ Decisions made while using the app; keep these when sites change their DOM.
 - DM inbox and threads, calls, login/2FA, account settings.
 - Left rail hidden; only the **Notifications** heart stays, pinned top-left as a bare icon.
   The rail must not expand on hover.
+- **Stories:** clicking a person's avatar (story ring) opens their stories in the locked viewer.
+  The viewer plays all of that person's stories and closes when Instagram moves on to the next
+  person. There is no stories tray or browsing between people.
 
 **Facebook**
 - Messages, calls, login/2FA, settings/privacy.
