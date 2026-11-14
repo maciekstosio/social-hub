@@ -36,6 +36,15 @@ test('Instagram: the viewer stays locked to one item', () => {
   assert.notEqual(ig.itemKey('https://www.instagram.com/reel/ABC/'), ig.itemKey('https://www.instagram.com/reel/DEF/'));
 });
 
+test("Instagram: an avatar's stories open in the viewer, locked to that user", () => {
+  assert.deepEqual(ig.classify('https://www.instagram.com/stories/bob/'), { kind: 'viewer', url: 'https://www.instagram.com/stories/bob/' });
+  assert.equal(kind(ig, 'https://www.instagram.com/stories/bob'), 'viewer');
+  assert.equal(ig.itemKey('https://www.instagram.com/stories/bob/'), ig.itemKey('https://www.instagram.com/stories/bob/31337/'));
+  assert.equal(ig.itemKey('https://www.instagram.com/stories/bob/1/'), ig.itemKey('https://www.instagram.com/stories/bob/2/'));
+  assert.notEqual(ig.itemKey('https://www.instagram.com/stories/bob/'), ig.itemKey('https://www.instagram.com/stories/alice/'));
+  assert.equal(kind(ig, 'https://www.instagram.com/stories/'), 'block');
+});
+
 test('Facebook: messages, login and calls only', () => {
   assert.equal(kind(fb, 'https://www.facebook.com/messages/e2ee/t/99/'), 'allow');
   assert.equal(kind(fb, 'https://www.facebook.com/two_step_verification/authentication/'), 'allow');

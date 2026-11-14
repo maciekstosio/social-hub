@@ -65,7 +65,8 @@ function instagram(config: HubConfig): Platform {
   const allowPath = /^\/(direct|accounts|challenge|two_factor|auth_platform)(\/|$)/;
   const callPath = /^\/(call|rtc)(\/|$)/;
   const itemPath = /^\/(?:[\w.]+\/)?(p|reels?|tv)\/([\w-]+)/;
-  const storyPath = /^\/stories\/([\w.]+)\/(\d+)/;
+  // Avatar clicks open /stories/<user>/ (no item id); IG then steps through /stories/<user>/<id>/.
+  const storyPath = /^\/stories\/([\w.]+)(\/|$)/;
 
   const itemKey = (url: string) => {
     const u = parse(url);
@@ -73,7 +74,9 @@ function instagram(config: HubConfig): Platform {
     const item = u.pathname.match(itemPath);
     if (item) return `ig:post:${item[2]}`;
     const story = u.pathname.match(storyPath);
-    if (story) return `ig:story:${story[1]}:${story[2]}`;
+    // One key per user, so the viewer plays all of that user's stories but closes
+    // when Instagram auto-advances to the next person's.
+    if (story) return `ig:story:${story[1].toLowerCase()}`;
     return null;
   };
 
